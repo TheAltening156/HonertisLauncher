@@ -1,19 +1,90 @@
-import javax.swing.*;
-import java.awt.*;
-import java.awt.event.*;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.Cursor;
+import java.awt.Dimension;
+import java.awt.Font;
+import java.awt.event.FocusAdapter;
+import java.awt.event.FocusEvent;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
-public class Main extends JFrame {
+import javax.imageio.ImageIO;
+import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.JButton;
+import javax.swing.JComboBox;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JTextField;
+import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
+
+import fr.litarvan.openauth.microsoft.MicrosoftAuthenticator;
+
+@SuppressWarnings("serial")
+public class Main extends JFrame{
+	
+	public static File workdir = new File(String.valueOf(System.getenv("APPDATA")) + "/.honertis");
     public Auth auth;
+    public static Main window = new Main();
 
+    public static void main(String[] args) {
+    	if (allowedOs()) {
+    		if (!workdir.exists()) {
+    			workdir.mkdirs();
+    			System.out.println("created " + workdir);
+    		} 
+    		SwingUtilities.invokeLater(() -> {
+    			window.setVisible(true);
+    		});
+    	} else {
+    		JOptionPane.showMessageDialog(null, "Votre OS n'est pas supporté", "Erreur", 0);
+    		System.exit(0);
+    	} 
+    }
+    
     public Main() {
+
         // Configuration de la fenêtre
         setTitle("Honertis Launcher 1.0");
         setSize(500, 250);
         setLocationRelativeTo(null); // Centrer la fenêtre
         setDefaultCloseOperation(EXIT_ON_CLOSE);
-
+        setResizable(false);
+        try {
+        	setIconImage(ImageIO.read(Main.class.getResource("/assets/icon32.png")).getScaledInstance(32, 32, 0));
+        } catch (IOException e) {
+        	e.printStackTrace();
+        }
+        
         // Fond avec panneau personnalisé
         JPanel mainPanel = new JPanel();
         mainPanel.setBackground(new Color(34, 34, 34));
@@ -90,12 +161,7 @@ public class Main extends JFrame {
         btnAction.setForeground(Color.WHITE);
         btnAction.setFocusPainted(false);
         btnAction.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        btnAction.setToolTipText("Options (à définir)");
-
-        // Action du bouton ⋮
-        btnAction.addActionListener(e -> {
-            JOptionPane.showMessageDialog(this, "Action du bouton d'options !");
-        });
+        btnAction.setToolTipText("Connexion Microsoft");
 
         // Ajout des composants à la ligne
         nameLinePanel.add(name);
@@ -118,32 +184,14 @@ public class Main extends JFrame {
         SwingUtilities.invokeLater(() -> {
             launchButton.requestFocusInWindow(); // ou tout autre composant
         });
-        // Action du bouton Lancer
-        launchButton.addActionListener(e -> {
-            String username = name.getText().trim();
-            if (username.isEmpty() || !Utils.isValidMinecraftUsername(username)) {
-                JOptionPane.showMessageDialog(null, "Veuillez entrer un nom d'utilisateur valide.");
-                return;
-            } else {
-                auth = new Auth(username, "", "", false);
-            }
-
-            if (auth != null) {
-                try {
-                    Runtime.getRuntime().exec("java -jar tonjeu.jar " + username);
-                } catch (IOException ex) {
-                    JOptionPane.showMessageDialog(null, "Erreur lors du lancement du jeu.", "Erreur", JOptionPane.ERROR_MESSAGE);
-                }
-            }
-        });
+        
 
         centerPanel.add(launchButton);
         JPanel bottomLinePanel = new JPanel();
         bottomLinePanel.setLayout(new BoxLayout(bottomLinePanel, BoxLayout.X_AXIS));
         bottomLinePanel.setBackground(new Color(34, 34, 34));
-
-        // Liste des versions (à personnaliser)
-        String[] versions = {"1.2", "1.3", "1.4", "1.5" };
+        
+        String[] versions = getTagsVersions();
         JComboBox<String> versionCombo = new JComboBox<>(versions);
         versionCombo.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         versionCombo.setMaximumSize(new Dimension(120, 40));
@@ -151,17 +199,301 @@ public class Main extends JFrame {
         versionCombo.setBackground(new Color(60, 60, 60));
         versionCombo.setForeground(Color.WHITE);
         versionCombo.setFocusable(false);
-
-        // Ajout des composants au panel
+        
         bottomLinePanel.add(launchButton);
-        bottomLinePanel.add(Box.createRigidArea(new Dimension(20, 0))); // espacement
+        bottomLinePanel.add(Box.createRigidArea(new Dimension(20, 0))); 
         bottomLinePanel.add(versionCombo);
         centerPanel.add(bottomLinePanel);
-    }
-
-    public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> {
-            new Main().setVisible(true);
+        MicrosoftAuthenticator authenticator = new MicrosoftAuthenticator();
+        // Action du bouton ⋮
+        btnAction.addActionListener(e -> {
+        	try {
+				authenticator.loginWithAsyncWebview().thenAccept(result -> 
+				{
+					if (auth != null)
+						auth = new Auth(result.getProfile().getName(), result.getProfile().getId(), result.getAccessToken(), true);
+					else {
+						JOptionPane.showMessageDialog(null, "Veuillez réexecuter le launcher pour executer la connexion microsoft de nouveau.", "Info", 1);
+					}
+					}).exceptionally(ex -> {
+						ex.printStackTrace();
+						return null;
+					});
+		        } catch (Error exc) {
+        		JOptionPane.showMessageDialog(null, exc.getStackTrace());
+        	}
         });
+        launchButton.addActionListener(e -> {
+        	if (auth == null) {
+	            String username = name.getText().trim();
+	            if (username.isEmpty() || !Utils.isValidMinecraftUsername(username)) {
+	                JOptionPane.showMessageDialog(null, "Veuillez entrer un nom d'utilisateur valide.\nOu authentifiez vous avec votre compte microsoft.");
+	                return;
+	            } else {
+	                auth = new Auth(username, "", "", false);
+	            }
+        	}
+            if (auth != null) {
+                String selectedVersion = (String) versionCombo.getSelectedItem();
+                try {
+					launch(auth, selectedVersion);
+				} catch (IOException | InterruptedException e1) {
+					e1.printStackTrace();
+				} 
+            }
+        });
+    }
+    
+    public static void downloadLibraries() throws Exception {
+        File jsonFile = new File(workdir, "versions/1.8.8/1.8.8.json");
+        if (!jsonFile.exists()) throw new FileNotFoundException("1.8.8.json manquant");
+
+        JSONObject root = new JSONObject(new String(Files.readAllBytes(jsonFile.toPath()), StandardCharsets.UTF_8));
+        JSONArray libraries = root.getJSONArray("libraries");
+
+        File libDir = new File(workdir, "lib");
+        if (!libDir.exists()) libDir.mkdirs();
+
+        for (int i = 0; i < libraries.length(); i++) {
+            JSONObject lib = libraries.getJSONObject(i);
+            String name = lib.getString("name");
+
+            // Ex: "com.google.code.gson:gson:2.2.4"
+            String[] parts = name.split(":");
+            if (parts.length < 3) continue;
+
+            String group = parts[0].replace('.', '/');
+            String artifact = parts[1];
+            String version = parts[2];
+
+            String path = group + "/" + artifact + "/" + version + "/" + artifact + "-" + version + ".jar";
+            String downloadUrl = "https://libraries.minecraft.net/" + path;
+
+            File dest = new File(libDir, artifact + "-" + version + ".jar");
+            if (!dest.exists()) {
+                try (InputStream in = new URL(downloadUrl).openStream()) {
+                    Files.copy(in, dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                    System.out.println("[OK] Lib téléchargée : " + artifact);
+                } catch (Exception e) {
+                    System.err.println("[Erreur] Échec lib : " + artifact);
+                }
+            }
+        }
+    }
+    public static void downloadAssets() throws Exception {
+        File jsonFile = new File(workdir, "versions/1.8.8/1.8.8.json");
+        JSONObject root = new JSONObject(new String(Files.readAllBytes(jsonFile.toPath()), StandardCharsets.UTF_8));
+        String assetIndexName = root.getString("assets");
+
+        // Télécharger l’index
+        String assetIndexUrl = "https://pixelpc.fr/honertis/" + assetIndexName + ".json";
+        File indexFile = new File(workdir, "assets/indexes/" + assetIndexName + ".json");
+        if (!indexFile.exists()) {
+            indexFile.getParentFile().mkdirs();
+            try (InputStream in = new URL(assetIndexUrl).openStream()) {
+                Files.copy(in, indexFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                System.out.println("[OK] Index assets téléchargé.");
+            }
+        }
+
+        JSONObject index = new JSONObject(new String(Files.readAllBytes(indexFile.toPath()), StandardCharsets.UTF_8)).getJSONObject("objects");
+        File objectDir = new File(workdir, "assets/objects");
+
+        for (String key : index.keySet()) {
+            JSONObject entry = index.getJSONObject(key);
+            String hash = entry.getString("hash");
+            String subDir = hash.substring(0, 2);
+            String url = "https://resources.download.minecraft.net/" + subDir + "/" + hash;
+
+            File assetFile = new File(objectDir, subDir + "/" + hash);
+            if (!assetFile.exists()) {
+                assetFile.getParentFile().mkdirs();
+                try (InputStream in = new URL(url).openStream()) {
+                    Files.copy(in, assetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                    System.out.println("[OK] Asset téléchargé : " + key);
+                } catch (Exception e) {
+                    System.err.println("[Erreur] Asset : " + key);
+                }
+            }
+        }
+    }
+	private static boolean allowedOs() {
+        String os = System.getProperty("os.name").toLowerCase();
+        if (os.contains("win"))
+          return true; 
+        return false;
+      }
+    
+    
+    String owner = "TheAltening156";  // Replace with repo owner
+    String repo = "Honertis";   
+    private String buildClasspath(String selectedVersion) {
+        File libDir = new File(workdir, "lib");
+        if (!libDir.exists()) libDir.mkdirs();
+        
+        try(InputStream in = new URL("https://github.com/" + owner + "/" + repo +"/releases/download/" + selectedVersion + "/Honertis." + selectedVersion + ".zip").openStream()) {
+        	Files.copy(in, Paths.get(workdir.getAbsolutePath() + "/Honertis" + selectedVersion + ".zip"), StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+			e.printStackTrace();
+		}
+        
+        try {
+			extractSpecificFileFromZip(workdir.getAbsolutePath() + "/Honertis" + selectedVersion + ".zip", "Honertis " + selectedVersion + "/" + "Honertis " + selectedVersion + ".jar", libDir.getAbsolutePath() + "/Honertis " + selectedVersion + ".jar");
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+        
+        File[] files = libDir.listFiles((dir, name) -> name.endsWith(".jar"));
+
+        ArrayList<String> classpathElements = new ArrayList<>();
+
+        for (File file : files) {
+            String name = file.getName();
+
+            // Inclure les libs communes (ne commencent pas par "Honertis-")
+            boolean isCommon = !name.startsWith("Honertis ");
+
+            // Inclure les .jar de la version sélectionnée
+            boolean isCorrectVersion = name.contains("Honertis " + selectedVersion);
+
+            if (isCommon || isCorrectVersion) {
+                classpathElements.add(file.getAbsolutePath());
+            }
+        }
+
+        return String.join(File.pathSeparator, classpathElements);
+    }
+    
+    public static void extractSpecificFileFromZip(String zipFilePath, String fileToExtract, String outputFilePath) throws IOException {
+        try (ZipInputStream zis = new ZipInputStream(new FileInputStream(zipFilePath))) {
+            ZipEntry entry;
+            while ((entry = zis.getNextEntry()) != null) {
+                if (entry.getName().equals(fileToExtract)) {
+                    // Crée le fichier de sortie
+                    try (FileOutputStream fos = new FileOutputStream(outputFilePath)) {
+                        byte[] buffer = new byte[4096];
+                        int len;
+                        while ((len = zis.read(buffer)) > 0) {
+                            fos.write(buffer, 0, len);
+                        }
+                    }
+                    zis.closeEntry();
+                    return;
+                }
+                zis.closeEntry();
+            }
+            throw new FileNotFoundException("Fichier " + fileToExtract + " non trouvé dans le ZIP.");
+        }
+    }
+    
+    private void launch(Auth auth, String version) throws IOException, InterruptedException {
+    	
+    	File json = new File(workdir, "versions/1.8.8");
+		Utils.download("https://pixelpc.fr/honertis/1.8.8.json", json, "1.8.8.json");
+		try {
+			downloadLibraries();
+			downloadAssets();
+			dlNatives();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+    	
+		window.setVisible(false);
+		
+    	System.out.println("[Launcher] Version sélectionnée : " + version);
+    	String classpath = buildClasspath(version);
+    	System.out.println("[Launcher] Classpath utilisé : " + classpath);
+
+        ProcessBuilder builder = new ProcessBuilder(
+            "java", 
+            "-Djava.library.path=" + workdir.getPath() + "/natives", 
+            "-cp", classpath, "net.minecraft.client.main.Main", 
+            "--gameDir", workdir.getPath(), 
+            "--assetsDir", "assets", 
+            "--assetIndex", "1.8", 
+            "--accessToken", auth.getAccessToken(), 
+            "--username", auth.getUsername(), 
+            "--uuid", auth.getUuid(), 
+            "--version", "1.8.8", 
+            "--userProperties", "{}"
+        );
+
+        builder.directory(workdir);
+        builder.inheritIO();
+        Process process = builder.start();
+        process.waitFor();
+        window.setVisible(true);
+	}
+    private String[] getTagsVersions() {
+
+         try {
+             String urlString = String.format("https://api.github.com/repos/%s/%s/tags", owner, repo);
+             URL url = new URL(urlString);
+             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+
+             conn.setRequestMethod("GET");
+             conn.setRequestProperty("Accept", "application/vnd.github.v3+json");
+
+             int responseCode = conn.getResponseCode();
+             if (responseCode == 200) {
+                 BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                 StringBuilder content = new StringBuilder();
+                 String inputLine;
+
+                 while ((inputLine = in.readLine()) != null) {
+                     content.append(inputLine);
+                 }
+                 in.close();
+                 conn.disconnect();
+
+                 // Parse JSON response to extract tag names
+                 JsonArray tagsArray = JsonParser.parseString(content.toString()).getAsJsonArray();
+                 ArrayList<String> tagNames = new ArrayList<>();
+
+                 for (JsonElement tagElement : tagsArray) {
+                     String tagName = tagElement.getAsJsonObject().get("name").getAsString();
+                     if (tagName.contains("Honertis")) continue;// Optional filter
+                     if (tagName.equals("1.3")) continue;
+                     tagNames.add(tagName);
+                 }
+
+                 // Convert List to String[]
+                 return tagNames.toArray(new String[0]);
+             } else {
+                 System.out.println("Failed to fetch tags. Response code: " + responseCode);
+             }
+         } catch (Exception e) {
+             e.printStackTrace();
+         }
+
+         return new String[0]; // Return empty array instead of null for safety
+     }
+    public void dlNatives() {
+    	String[] nativeFiles = {
+                "lwjgl.dll",
+                "lwjgl64.dll",
+                "OpenAL32.dll",
+                "OpenAL64.dll"
+            };
+
+            String baseUrl = "https://pixelpc.fr/honertis/natives/";
+            String outputDir = workdir.getAbsolutePath() + "/natives";
+
+            new File(outputDir).mkdirs();
+
+            for (String fileName : nativeFiles) {
+                try {
+                    String fileUrl = baseUrl + fileName;
+                    Path outputPath = Paths.get(outputDir, fileName);
+
+                    // Télécharger
+                    try (InputStream in = new URL(fileUrl).openStream()) {
+                        Files.copy(in, outputPath, StandardCopyOption.REPLACE_EXISTING);
+                        System.out.println(fileName + " telechargé.");
+                    }
+                } catch (IOException e) {
+                    System.err.println("Erreur téléchargement de " + fileName + ": " + e.getMessage());
+                }
+            }
     }
 }

@@ -9,7 +9,7 @@ public class Auth {
         this.isMicrosoft = isMicrosoft;
         this.username = username;
         this.uuid = uuid;
-        this.accessToken = isMicrosoft ? "0" : accessToken;
+        this.accessToken = isMicrosoft ? accessToken : "0";
     }
 
     public String getUsername() {
