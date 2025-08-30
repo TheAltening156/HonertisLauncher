@@ -210,7 +210,7 @@ public class Main extends JFrame{
         	try {
 				authenticator.loginWithAsyncWebview().thenAccept(result -> 
 				{
-					if (auth != null)
+					if (auth == null)
 						auth = new Auth(result.getProfile().getName(), result.getProfile().getId(), result.getAccessToken(), true);
 					else {
 						JOptionPane.showMessageDialog(null, "Veuillez réexecuter le launcher pour executer la connexion microsoft de nouveau.", "Info", 1);
@@ -224,25 +224,33 @@ public class Main extends JFrame{
         	}
         });
         launchButton.addActionListener(e -> {
+            String username = name.getText().trim();
         	if (auth == null) {
-	            String username = name.getText().trim();
 	            if (username.isEmpty() || !Utils.isValidMinecraftUsername(username)) {
 	                JOptionPane.showMessageDialog(null, "Veuillez entrer un nom d'utilisateur valide.\nOu authentifiez vous avec votre compte microsoft.");
 	                return;
-	            } else {
-	                auth = new Auth(username, "", "", false);
+	            } else if (!username.isEmpty() && Utils.isValidMinecraftUsername(username)){
+	                auth = new Auth(username, "", "0", false);
+	                startGame(versionCombo);
+	                auth = null;
 	            }
         	}
-            if (auth != null) {
-                String selectedVersion = (String) versionCombo.getSelectedItem();
-                try {
-					launch(auth, selectedVersion);
-				} catch (IOException | InterruptedException e1) {
-					e1.printStackTrace();
-				} 
-            }
+            if (auth != null && auth.isMicrosoftAccount())
+            	startGame(versionCombo);
+
         });
     }
+    
+    private void startGame(JComboBox<String> versionCombo) {
+    	if (auth != null) {
+            String selectedVersion = (String) versionCombo.getSelectedItem();
+            try {
+				launch(auth, selectedVersion);
+			} catch (IOException | InterruptedException e1) {
+				e1.printStackTrace();
+			} 
+        }
+	}
     
     public static void downloadLibraries() throws Exception {
         File jsonFile = new File(workdir, "versions/1.8.8/1.8.8.json");
@@ -276,6 +284,15 @@ public class Main extends JFrame{
                     System.out.println("[OK] Lib téléchargée : " + artifact);
                 } catch (Exception e) {
                     System.err.println("[Erreur] Échec lib : " + artifact);
+ 
+                    if (artifact.equals("yaml")) {
+                    	try (InputStream in = new URL("https://repo1.maven.org/maven2/org/yaml/snakeyaml/1.30/snakeyaml-1.30.jar").openStream()) {
+                        	Files.copy(in, dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                        	System.out.println("[OK] Lib téléchargée : " + artifact);
+                    	} catch (Exception ee) {
+                        	System.err.println("[Erreur] Échec lib : " + artifact);
+                    	}
+                    }
                 }
             }
         }
@@ -389,7 +406,7 @@ public class Main extends JFrame{
     private void launch(Auth auth, String version) throws IOException, InterruptedException {
     	
     	File json = new File(workdir, "versions/1.8.8");
-		Utils.download("https://pixelpc.fr/honertis/1.8.8.json", json, "1.8.8.json");
+		Utils.download("https://raw.githubusercontent.com/TheAltening156/idk/refs/heads/main/Honertis.json", json, "1.8.8.json");
 		try {
 			downloadLibraries();
 			downloadAssets();
@@ -470,30 +487,30 @@ public class Main extends JFrame{
      }
     public void dlNatives() {
     	String[] nativeFiles = {
-                "lwjgl.dll",
-                "lwjgl64.dll",
-                "OpenAL32.dll",
-                "OpenAL64.dll"
-            };
+            "lwjgl.dll",
+            "lwjgl64.dll",
+            "OpenAL32.dll",
+            "OpenAL64.dll"
+        };
 
-            String baseUrl = "https://pixelpc.fr/honertis/natives/";
-            String outputDir = workdir.getAbsolutePath() + "/natives";
+        String baseUrl = "https://pixelpc.fr/honertis/natives/";
+        String outputDir = workdir.getAbsolutePath() + "/natives";
 
-            new File(outputDir).mkdirs();
+        new File(outputDir).mkdirs();
 
-            for (String fileName : nativeFiles) {
-                try {
-                    String fileUrl = baseUrl + fileName;
-                    Path outputPath = Paths.get(outputDir, fileName);
+        for (String fileName : nativeFiles) {
+            try {
+                String fileUrl = baseUrl + fileName;
+                Path outputPath = Paths.get(outputDir, fileName);
 
-                    // Télécharger
-                    try (InputStream in = new URL(fileUrl).openStream()) {
-                        Files.copy(in, outputPath, StandardCopyOption.REPLACE_EXISTING);
-                        System.out.println(fileName + " telechargé.");
-                    }
-                } catch (IOException e) {
-                    System.err.println("Erreur téléchargement de " + fileName + ": " + e.getMessage());
+                // Télécharger
+                try (InputStream in = new URL(fileUrl).openStream()) {
+                    Files.copy(in, outputPath, StandardCopyOption.REPLACE_EXISTING);
+                    System.out.println(fileName + " telechargé.");
                 }
+            } catch (IOException e) {
+                System.err.println("Erreur téléchargement de " + fileName + ": " + e.getMessage());
             }
+        }
     }
 }
