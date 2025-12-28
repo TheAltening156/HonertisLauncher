@@ -6,25 +6,32 @@ import java.awt.GradientPaint;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 import javax.swing.BorderFactory;
-import javax.swing.JButton;
-import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
-import javax.swing.JTextField;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
+
+@SuppressWarnings("serial")
 public class Main extends JFrame{
-	public File workdir = new File(Utils.getAppData() + "\\HonertisLauncher");
-    private JTextField pathField;
+	public static File workdir = new File(Utils.getAppData() + "\\HonertisLauncher");
+	public File jarDir = new File(workdir, "Launcher.jar");
     private JLabel currentText;
     private JProgressBar progressBar;
+
 
     public Main() {
     	if (!workdir.exists()) workdir.mkdirs();
@@ -60,7 +67,6 @@ public class Main extends JFrame{
         // Chemin
         JPanel pathPanel = new JPanel(new BorderLayout(5, 5));
         pathPanel.setOpaque(false);
-        pathField = new JTextField(Utils.getAppData() + "");
         
         currentText = new JLabel("Installation du launcher...", SwingConstants.CENTER);
         currentText.setFont(new Font("Arial", Font.BOLD, 22));
@@ -79,31 +85,172 @@ public class Main extends JFrame{
         mainPanel.add(installPanel, BorderLayout.SOUTH);
         
         new Thread(() -> {
-            for (int i = 0; i <= 100; i++) {
-                final int progress = i;
-                SwingUtilities.invokeLater(() -> progressBar.setValue(progress));
-                try {
-					Thread.sleep(50);
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-				}
-            }
-            SwingUtilities.invokeLater(() -> {
-            	try {
-					Utils.download("https://github.com/TheAltening156/HonertisLauncher/releases/latest/download/HonertisLauncher.jar", new File(workdir, "Launcher.jar"));
-                    JOptionPane.showMessageDialog(this, "Installation terminée !");
-				} catch (IOException e1) {
-					e1.printStackTrace();
-					JOptionPane.showMessageDialog(this, "Une erreur est survenue pendant l'installation !");
-					JOptionPane.showMessageDialog(this, e1.getMessage());
-				}
-            });
+        	try {
+        		currentText.setText("Téléchargement et Installation du Launcher...");
+        		setProgress(25);
+				Utils.download("https://github.com/TheAltening156/LauncherJar/releases/latest/download/HonertisLauncher.jar", jarDir);
+			} catch (IOException e1) {
+				e1.printStackTrace();
+				JOptionPane.showMessageDialog(this, "Impossible d'installer Launcher.jar", "Une erreur est survenue", JOptionPane.ERROR_MESSAGE);
+				JOptionPane.showMessageDialog(this, e1.getMessage());
+				System.exit(0);
+			}
+        	try {
+        		setProgress(50);
+        		currentText.setText("Installation des fichiers requis...");
+        		CefBootstrap.download();
+			} catch (IOException e1) {
+				e1.printStackTrace();
+				JOptionPane.showMessageDialog(this, "Impossible d'installer les fichiers requis.", "Une erreur est survenue", JOptionPane.ERROR_MESSAGE);
+				JOptionPane.showMessageDialog(this, e1.getMessage());
+				System.exit(0);
+			}
+        	try {
+        		setProgress(75);
+        		currentText.setText("Extraction des fichiers requis...");
+        		CefBootstrap.extract();
+			} catch (IOException e1) {
+				e1.printStackTrace();
+				JOptionPane.showMessageDialog(this, "Impossible d'extraire les fichiers requis.", "Une erreur est survenue", JOptionPane.ERROR_MESSAGE);
+				JOptionPane.showMessageDialog(this, e1.getMessage());
+				System.exit(0);
+			}
+        	try {
+        		setProgress(100);
+        		currentText.setText("Lancement du launcher...");
+        		startLauncher();
+			} catch (IOException | InterruptedException e1) {
+				e1.printStackTrace();
+				JOptionPane.showMessageDialog(this, "Impossible d'extraire les fichiers requis.", "Une erreur est survenue", JOptionPane.ERROR_MESSAGE);
+				JOptionPane.showMessageDialog(this, e1.getMessage());
+				System.exit(0);
+			}
+            
         }).start();
     }
+    
+    private void startLauncher() throws IOException, InterruptedException{
+    	setVisible(false);
+		ProcessBuilder builder = new ProcessBuilder(
+				"java",
+				"-Djava.library.path=" + getJcefDir(),
+				"-jar",
+				"Launcher.jar");
+		builder.directory(workdir);
+        builder.inheritIO();
+        Process process= null;
+    	process = builder.start();
+		process.waitFor();
+		System.exit(0);
+	}
+
+	public void setProgress(int progress) {
+    	if (progress <= 100) 
+    		SwingUtilities.invokeLater(() -> progressBar.setValue(progress));
+	}
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
             new Main().setVisible(true);
         });
     }
+    
+    private static File getJcefDir() {
+        return new File(workdir, "jcef");
+    }
+	public static class CefBootstrap {
+
+	    private static String getCefUrl() {
+	        switch (Utils.getOSType()) {
+	            case WINDOWS:
+	                return "https://github.com/jcefmaven/jcefmaven/releases/download/141.0.10/jcef-natives-windows-amd64-jcef-2caef5a+cef-141.0.10+g1d65b0d+chromium-141.0.7390.123.jar";
+	            case LINUX:
+	                return "https://github.com/jcefmaven/jcefmaven/releases/download/141.0.10/jcef-natives-linux-amd64-jcef-2caef5a+cef-141.0.10+g1d65b0d+chromium-141.0.7390.123.jar";
+	            case MACOS:
+	                return "https://github.com/jcefmaven/jcefmaven/releases/download/141.0.10/jcef-natives-macosx-amd64-jcef-2caef5a+cef-141.0.10+g1d65b0d+chromium-141.0.7390.123.jar";
+	            default:
+	                throw new RuntimeException("Unsupported OS");
+	        }
+	    }
+	    public static File baseDir = getJcefDir();
+	    public static File jarFile = new File(baseDir, "jcef-natives.jar");
+        public static File tarGzFile = new File(baseDir, "jcef-natives.tar.gz");
+        public static File tarFile = new File(baseDir, "jcef-natives.tar");
+
+	    public static void download() throws IOException{
+            baseDir.mkdirs();
+
+            if (!jarFile.exists()) {
+                System.out.println("[JCEF] Downloading natives...");
+                Utils.download(getCefUrl(), jarFile);
+            }
+	    }
+	    
+	    public static void extract() throws IOException{
+	    	 if (!tarGzFile.exists()) {
+	             extractTarGzFromJar(jarFile, tarGzFile);
+	         }
+
+	         if (!tarFile.exists()) {
+	             gunzip(tarGzFile, tarFile);
+	         }
+
+	         extractTar(tarFile, baseDir);
+		}
+	    private static void extractTarGzFromJar(File jar, File outTarGz) throws IOException {
+	        try (ZipInputStream zip = new ZipInputStream(new FileInputStream(jar))) {
+	            ZipEntry entry;
+	            while ((entry = zip.getNextEntry()) != null) {
+	                if (entry.getName().endsWith(".tar.gz") || entry.getName().endsWith(".tgz")) {
+	                    try (FileOutputStream fos = new FileOutputStream(outTarGz)) {
+	                        byte[] buffer = new byte[8192];
+	                        int len;
+	                        while ((len = zip.read(buffer)) > 0) {
+	                            fos.write(buffer, 0, len);
+	                        }
+	                    }
+	                    return;
+	                }
+	            }
+	        }
+	        throw new IOException("No .tar.gz found in JCEF jar");
+	    }
+	    
+	    private static void gunzip(File gzip, File tar) throws IOException {
+	        try (GZIPInputStream gis = new GZIPInputStream(new FileInputStream(gzip));
+	             FileOutputStream fos = new FileOutputStream(tar)) {
+
+	            byte[] buffer = new byte[8192];
+	            int len;
+	            while ((len = gis.read(buffer)) > 0) {
+	                fos.write(buffer, 0, len);
+	            }
+	        }
+	    }
+	    
+	    @SuppressWarnings("deprecation")
+		private static void extractTar(File tarFile, File outDir) throws IOException {
+	        try (TarArchiveInputStream tis =
+	                     new TarArchiveInputStream(new FileInputStream(tarFile))) {
+
+	            TarArchiveEntry entry;
+	            while ((entry = tis.getNextTarEntry()) != null) {
+	                File out = new File(outDir, entry.getName());
+
+	                if (entry.isDirectory()) {
+	                    out.mkdirs();
+	                } else {
+	                    out.getParentFile().mkdirs();
+	                    try (FileOutputStream fos = new FileOutputStream(out)) {
+	                        byte[] buffer = new byte[8192];
+	                        int len;
+	                        while ((len = tis.read(buffer)) > 0) {
+	                            fos.write(buffer, 0, len);
+	                        }
+	                    }
+	                }
+	            }
+	        }
+	    }
+	}
 }

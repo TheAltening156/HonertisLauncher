@@ -13,11 +13,10 @@ public class Utils {
 	}
 
 	public static void download(String url, File dest) throws IOException {
-		if (!dest.exists()) {
-			try (InputStream in = new URL(url).openStream()) {
-				Files.copy(in, dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
-			}
+		try (InputStream in = new URL(url).openStream()) {
+			Files.copy(in, dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
 		}
+		
 	}
 
 	public enum EnumOS {
