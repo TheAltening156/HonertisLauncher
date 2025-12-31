@@ -27,7 +27,7 @@ import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 
 @SuppressWarnings("serial")
 public class Main extends JFrame{
-	public static File workdir = new File(Utils.getAppData() + "\\HonertisLauncher");
+	public static File workdir = new File(Utils.getAppData() + "/HonertisLauncher");
 	public File jarDir = new File(workdir, "Launcher.jar");
     private JLabel currentText;
     private JProgressBar progressBar;
@@ -121,7 +121,7 @@ public class Main extends JFrame{
         		startLauncher();
 			} catch (IOException | InterruptedException e1) {
 				e1.printStackTrace();
-				JOptionPane.showMessageDialog(this, "Impossible d'extraire les fichiers requis.", "Une erreur est survenue", JOptionPane.ERROR_MESSAGE);
+				JOptionPane.showMessageDialog(this, "Impossible d'executer le launcher.", "Une erreur est survenue", JOptionPane.ERROR_MESSAGE);
 				JOptionPane.showMessageDialog(this, e1.getMessage());
 				System.exit(0);
 			}
