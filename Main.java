@@ -91,8 +91,8 @@ public class Main extends JFrame{
 				Utils.download("https://github.com/TheAltening156/LauncherJar/releases/latest/download/HonertisLauncher.jar", jarDir);
 			} catch (IOException e1) {
 				e1.printStackTrace();
-				JOptionPane.showMessageDialog(this, "Impossible d'installer Launcher.jar", "Une erreur est survenue", JOptionPane.ERROR_MESSAGE);
-				JOptionPane.showMessageDialog(this, e1.getMessage());
+				JOptionPane.showMessageDialog(this, "Impossible d'installer Launcher.jar. \nVérifiez votre connexion internet et réessayez.", "Une erreur est survenue", JOptionPane.ERROR_MESSAGE);
+				//JOptionPane.showMessageDialog(this, e1.getLocalizedMessage());
 				System.exit(0);
 			}
         	try {
@@ -101,18 +101,18 @@ public class Main extends JFrame{
         		CefBootstrap.download();
 			} catch (IOException e1) {
 				e1.printStackTrace();
-				JOptionPane.showMessageDialog(this, "Impossible d'installer les fichiers requis.", "Une erreur est survenue", JOptionPane.ERROR_MESSAGE);
-				JOptionPane.showMessageDialog(this, e1.getMessage());
+				JOptionPane.showMessageDialog(this, "Impossible d'installer les fichiers requis.  \nVérifiez votre connexion internet et réessayez.", "Une erreur est survenue", JOptionPane.ERROR_MESSAGE);
+				//JOptionPane.showMessageDialog(this, e1.getLocalizedMessage());
 				System.exit(0);
 			}
         	try {
         		setProgress(75);
-        		currentText.setText("Extraction des fichiers requis...");
+        		currentText.setText("Extraction des fichiers...");
         		CefBootstrap.extract();
 			} catch (IOException e1) {
 				e1.printStackTrace();
 				JOptionPane.showMessageDialog(this, "Impossible d'extraire les fichiers requis.", "Une erreur est survenue", JOptionPane.ERROR_MESSAGE);
-				JOptionPane.showMessageDialog(this, e1.getMessage());
+				JOptionPane.showMessageDialog(this, e1.getLocalizedMessage());
 				System.exit(0);
 			}
         	try {
@@ -122,7 +122,7 @@ public class Main extends JFrame{
 			} catch (IOException | InterruptedException e1) {
 				e1.printStackTrace();
 				JOptionPane.showMessageDialog(this, "Impossible d'executer le launcher.", "Une erreur est survenue", JOptionPane.ERROR_MESSAGE);
-				JOptionPane.showMessageDialog(this, e1.getMessage());
+				JOptionPane.showMessageDialog(this, e1.getLocalizedMessage());
 				System.exit(0);
 			}
             
