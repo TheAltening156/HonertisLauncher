@@ -16,7 +16,6 @@ public class Utils {
 		try (InputStream in = new URL(url).openStream()) {
 			Files.copy(in, dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
 		}
-		
 	}
 
 	public enum EnumOS {
