@@ -9,6 +9,8 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -30,11 +32,15 @@ public class Main extends JFrame{
 	public static File workdir = new File(Utils.getAppData() + "/HonertisLauncher");
 	public File jarDir = new File(workdir, "Launcher.jar");
     private JLabel currentText;
-    private JProgressBar progressBar;
+    public static JProgressBar progressBar;
+	public static JProgressBar stateBar;
 
-
-    public Main() {
+    public static void main(String[] args) {
     	if (!workdir.exists()) workdir.mkdirs();
+    	SwingUtilities.invokeLater(() -> new Main().setVisible(true));
+	}
+    
+    public Main() {
         setTitle("Installateur du launcher Honertis");
         setSize(550, 750);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -78,45 +84,66 @@ public class Main extends JFrame{
         // Installation
         JPanel installPanel = new JPanel(new BorderLayout(5, 5));
         installPanel.setOpaque(false);
+        
+        stateBar = new JProgressBar();
+        stateBar.setStringPainted(true);
+        stateBar.setForeground(new Color(100,149,237));
+        stateBar.setMaximum(100);
+        installPanel.add(stateBar, BorderLayout.NORTH);
+        
         progressBar = new JProgressBar();
         progressBar.setStringPainted(true);
-        progressBar.setForeground(new Color(60, 179, 113));
+        progressBar.setForeground(new Color(100,149,237));
+        progressBar.setMaximum(4);
         installPanel.add(progressBar, BorderLayout.SOUTH);
+        
         mainPanel.add(installPanel, BorderLayout.SOUTH);
         
         new Thread(() -> {
         	try {
         		currentText.setText("Téléchargement et Installation du Launcher...");
-        		setProgress(25);
+        		setProgress(1, " / 4", progressBar);
 				Utils.download("https://github.com/TheAltening156/LauncherJar/releases/latest/download/HonertisLauncher.jar", jarDir);
 			} catch (IOException e1) {
 				e1.printStackTrace();
 				JOptionPane.showMessageDialog(this, "Impossible d'installer Launcher.jar. \nVérifiez votre connexion internet et réessayez.", "Une erreur est survenue", JOptionPane.ERROR_MESSAGE);
-				//JOptionPane.showMessageDialog(this, e1.getLocalizedMessage());
 				System.exit(0);
 			}
         	try {
-        		setProgress(50);
+        		setProgress(2, " / 4", progressBar);
         		currentText.setText("Installation des fichiers requis...");
-        		CefBootstrap.download();
+        		CefBootstrap.download(false);
 			} catch (IOException e1) {
 				e1.printStackTrace();
 				JOptionPane.showMessageDialog(this, "Impossible d'installer les fichiers requis.  \nVérifiez votre connexion internet et réessayez.", "Une erreur est survenue", JOptionPane.ERROR_MESSAGE);
-				//JOptionPane.showMessageDialog(this, e1.getLocalizedMessage());
 				System.exit(0);
 			}
         	try {
-        		setProgress(75);
+        		setProgress(3, " / 4", progressBar);
         		currentText.setText("Extraction des fichiers...");
-        		CefBootstrap.extract();
+        		CefBootstrap.extract(false);
 			} catch (IOException e1) {
 				e1.printStackTrace();
-				JOptionPane.showMessageDialog(this, "Impossible d'extraire les fichiers requis.", "Une erreur est survenue", JOptionPane.ERROR_MESSAGE);
-				JOptionPane.showMessageDialog(this, e1.getLocalizedMessage());
-				System.exit(0);
+				try {
+	        		currentText.setText("Réinstallation des fichiers requis...");
+	        		CefBootstrap.download(true);
+				} catch (IOException e2) {
+					e2.printStackTrace();
+					JOptionPane.showMessageDialog(this, "Impossible d'installer les fichiers requis.  \nVérifiez votre connexion internet et réessayez.", "Une erreur est survenue", JOptionPane.ERROR_MESSAGE);
+					System.exit(0);
+				}
+	        	try {
+	        		currentText.setText("Extraction des fichiers...");
+	        		CefBootstrap.extract(true);
+				} catch (IOException e2) {
+					e2.printStackTrace();
+					JOptionPane.showMessageDialog(this, "Impossible d'extraire les fichiers requis.", "Une erreur est survenue", JOptionPane.ERROR_MESSAGE);
+					JOptionPane.showMessageDialog(this, e2.getLocalizedMessage());
+					System.exit(0);
+				}
 			}
         	try {
-        		setProgress(100);
+        		setProgress(4, " / 4", progressBar);
         		currentText.setText("Lancement du launcher...");
         		startLauncher();
 			} catch (IOException | InterruptedException e1) {
@@ -128,6 +155,8 @@ public class Main extends JFrame{
             
         }).start();
     }
+    
+    public void createWindow() {}
     
     private void startLauncher() throws IOException, InterruptedException{
     	setVisible(false);
@@ -143,18 +172,15 @@ public class Main extends JFrame{
 		process.waitFor();
 		System.exit(0);
 	}
-
-	public void setProgress(int progress) {
-    	if (progress <= 100) 
-    		SwingUtilities.invokeLater(() -> progressBar.setValue(progress));
+    
+	public static void setProgress(long progress, String text, JProgressBar progressBar) {
+    	if (progress <= progressBar.getMaximum()) 
+    		SwingUtilities.invokeLater(() -> { 
+    			progressBar.setValue((int) progress);
+    			progressBar.setString(text.contains("Extracting") ? text : (progress + text));
+    		});
 	}
 
-    public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> {
-            new Main().setVisible(true);
-        });
-    }
-    
     private static File getJcefDir() {
         return new File(workdir, "jcef");
     }
@@ -177,24 +203,28 @@ public class Main extends JFrame{
         public static File tarGzFile = new File(baseDir, "jcef-natives.tar.gz");
         public static File tarFile = new File(baseDir, "jcef-natives.tar");
 
-	    public static void download() throws IOException{
+	    public static void download(boolean bruteforce) throws IOException{
             baseDir.mkdirs();
 
-            if (!jarFile.exists()) {
-                System.out.println("[JCEF] Downloading natives...");
+            if ((!jarFile.exists() && !bruteforce) || bruteforce) {
+                System.out.println("[Launcher] " + (bruteforce ? "Red" : "D") + "ownloading JCEF natives...");
                 Utils.download(getCefUrl(), jarFile);
             }
 	    }
 	    
-	    public static void extract() throws IOException{
-	    	 if (!tarGzFile.exists()) {
+	    public static void extract(boolean bruteforce) throws IOException{
+	    	 if ((!tarGzFile.exists() && !bruteforce) || bruteforce) {
+	    		 setProgress(0, " %", stateBar);
+	    		 System.out.println("[Launcher] " + (bruteforce ? "Ree" : "E") + "xtracting " + tarGzFile);
 	             extractTarGzFromJar(jarFile, tarGzFile);
 	         }
 
-	         if (!tarFile.exists()) {
+	         if ((!tarFile.exists() && !bruteforce) || bruteforce) {
+	        	 setProgress(0, " %", stateBar);
+	        	 System.out.println("[Launcher] " + (bruteforce ? "Ree" : "E") + "xtracting " + tarFile);
 	             gunzip(tarGzFile, tarFile);
 	         }
-
+	         setProgress(0, " %", stateBar);
 	         extractTar(tarFile, baseDir);
 		}
 	    private static void extractTarGzFromJar(File jar, File outTarGz) throws IOException {
@@ -203,11 +233,7 @@ public class Main extends JFrame{
 	            while ((entry = zip.getNextEntry()) != null) {
 	                if (entry.getName().endsWith(".tar.gz") || entry.getName().endsWith(".tgz")) {
 	                    try (FileOutputStream fos = new FileOutputStream(outTarGz)) {
-	                        byte[] buffer = new byte[8192];
-	                        int len;
-	                        while ((len = zip.read(buffer)) > 0) {
-	                            fos.write(buffer, 0, len);
-	                        }
+	                    	extractMethod(zip, fos);
 	                    }
 	                    return;
 	                }
@@ -217,15 +243,7 @@ public class Main extends JFrame{
 	    }
 	    
 	    private static void gunzip(File gzip, File tar) throws IOException {
-	        try (GZIPInputStream gis = new GZIPInputStream(new FileInputStream(gzip));
-	             FileOutputStream fos = new FileOutputStream(tar)) {
-
-	            byte[] buffer = new byte[8192];
-	            int len;
-	            while ((len = gis.read(buffer)) > 0) {
-	                fos.write(buffer, 0, len);
-	            }
-	        }
+	        extractMethod(new GZIPInputStream(new FileInputStream(gzip)), new FileOutputStream(tar));
 	    }
 	    
 	    @SuppressWarnings("deprecation")
@@ -242,15 +260,35 @@ public class Main extends JFrame{
 	                } else {
 	                    out.getParentFile().mkdirs();
 	                    try (FileOutputStream fos = new FileOutputStream(out)) {
-	                        byte[] buffer = new byte[8192];
-	                        int len;
-	                        while ((len = tis.read(buffer)) > 0) {
-	                            fos.write(buffer, 0, len);
-	                        }
+	                        extractMethod(tis, fos);
 	                    }
 	                }
 	            }
 	        }
+	    }
+	    
+	    private static void extractMethod(InputStream in, OutputStream out) throws IOException{
+	    	byte[] buffer = new byte[8192];
+            int len;
+
+            long totalBytesRead = 0;
+			long lastTime = System.currentTimeMillis();
+			long lastBytes = 0;
+            while ((len = in.read(buffer)) > 0) {
+                out.write(buffer, 0, len);
+                
+                totalBytesRead += len;
+
+				long currentTime = System.currentTimeMillis();
+				if (currentTime - lastTime >= 250) {
+					long bytesInLastSec = totalBytesRead - lastBytes;
+					setProgress(0, "Extracting | " + Utils.getBytesPerSecString(bytesInLastSec * 4), Main.stateBar);
+				
+					lastTime = currentTime;
+					lastBytes = totalBytesRead;
+				}
+            }
+            setProgress(100, " %", stateBar);
 	    }
 	}
 }
