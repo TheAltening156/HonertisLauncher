@@ -29,7 +29,7 @@ import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 
 @SuppressWarnings("serial")
 public class Main extends JFrame{
-	public static File workdir = new File(Utils.getAppData() + "/HonertisLauncher");
+	public static File workdir = new File(Utils.getAppData(), "HonertisLauncher");
 	public File jarDir = new File(workdir, "Launcher.jar");
     private JLabel currentText;
     public static JProgressBar progressBar;
