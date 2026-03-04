@@ -115,33 +115,38 @@ public class Main extends JFrame{
         		CefBootstrap.download(false);
 			} catch (IOException e1) {
 				e1.printStackTrace();
-				JOptionPane.showMessageDialog(this, "Impossible d'installer les fichiers requis.  \nVérifiez votre connexion internet et réessayez.", "Une erreur est survenue", JOptionPane.ERROR_MESSAGE);
+				JOptionPane.showMessageDialog(this, "Impossible d'installer les fichiers requis. \nVérifiez votre connexion internet et réessayez.", "Une erreur est survenue", JOptionPane.ERROR_MESSAGE);
 				System.exit(0);
 			}
         	try {
-        		setProgress(3, " / 4", progressBar);
-        		currentText.setText("Extraction des fichiers...");
-        		CefBootstrap.extract(false);
-			} catch (IOException e1) {
-				e1.printStackTrace();
-				try {
-	        		currentText.setText("Réinstallation des fichiers requis...");
-	        		CefBootstrap.download(true);
-				} catch (IOException e2) {
-					e2.printStackTrace();
-					JOptionPane.showMessageDialog(this, "Impossible d'installer les fichiers requis.  \nVérifiez votre connexion internet et réessayez.", "Une erreur est survenue", JOptionPane.ERROR_MESSAGE);
-					System.exit(0);
-				}
-	        	try {
+        		Class.forName("javafx.application.Platform");
+        	} catch (ClassNotFoundException e) {
+        		System.out.println("JavaFX not found, downloading JCEF...");
+        		try {
+	        		setProgress(3, " / 4", progressBar);
 	        		currentText.setText("Extraction des fichiers...");
-	        		CefBootstrap.extract(true);
-				} catch (IOException e2) {
-					e2.printStackTrace();
-					JOptionPane.showMessageDialog(this, "Impossible d'extraire les fichiers requis.", "Une erreur est survenue", JOptionPane.ERROR_MESSAGE);
-					JOptionPane.showMessageDialog(this, e2.getLocalizedMessage());
-					System.exit(0);
+	        		CefBootstrap.extract(false);
+				} catch (IOException e1) {
+					e1.printStackTrace();
+					try {
+		        		currentText.setText("Réinstallation des fichiers requis...");
+		        		CefBootstrap.download(true);
+					} catch (IOException e2) {
+						e2.printStackTrace();
+						JOptionPane.showMessageDialog(this, "Impossible d'installer les fichiers requis. \nVérifiez votre connexion internet et réessayez.", "Une erreur est survenue", JOptionPane.ERROR_MESSAGE);
+						System.exit(0);
+					}
+		        	try {
+		        		currentText.setText("Extraction des fichiers...");
+		        		CefBootstrap.extract(true);
+					} catch (IOException e2) {
+						e2.printStackTrace();
+						JOptionPane.showMessageDialog(this, "Impossible d'extraire les fichiers requis.", "Une erreur est survenue", JOptionPane.ERROR_MESSAGE);
+						JOptionPane.showMessageDialog(this, e2.getLocalizedMessage());
+						System.exit(0);
+					}
 				}
-			}
+        	}
         	try {
         		setProgress(4, " / 4", progressBar);
         		currentText.setText("Lancement du launcher...");
@@ -155,9 +160,7 @@ public class Main extends JFrame{
             
         }).start();
     }
-    
-    public void createWindow() {}
-    
+        
     private void startLauncher() throws IOException, InterruptedException{
     	setVisible(false);
 		ProcessBuilder builder = new ProcessBuilder(
